@@ -45,11 +45,11 @@ export const calculateDPPath = (grid, playerPos, monsters, movesLeft, showHint) 
   if (!showHint) return { grid: clearedGrid, message: '' };
 
   const path = dpEscape(clearedGrid, playerPos, monsters, movesLeft);
-  if (path) {
-    path.forEach(cell => {
-      clearedGrid[cell.row][cell.col].isPath = true;
-    });
-    return { grid: clearedGrid, message: `Optimal path found: ${path.length} moves` };
+  if (path && path.length > 0) {
+    // Only highlight the very next step, not the full path
+    const nextStep = path[0];
+    clearedGrid[nextStep.row][nextStep.col].isPath = true;
+    return { grid: clearedGrid, message: `Next step highlighted — ${path.length} moves to escape` };
   }
   return { grid: clearedGrid, message: 'No escape possible' };
 };
