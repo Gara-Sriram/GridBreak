@@ -1,55 +1,45 @@
-import { bfs } from '../algorithms/bfs';
-import { multisourceBfs } from '../algorithms/multisourceBfs';
-import { floodFill } from '../algorithms/floodFill';
-import { dpEscape } from '../algorithms/dpEscape';
+import { computeSafeZone, findSafePath } from '../algorithms/safeZoneBfs';
 
-export const updateGridDanger = (currentGrid, monsters, showDanger) => {
-  const dangerLevels = multisourceBfs(currentGrid, monsters);
-  return currentGrid.map((r, rIdx) => r.map((c, cIdx) => ({
-    ...c,
-    dangerLevel: showDanger ? dangerLevels[rIdx][cIdx] : 0
-  })));
-};
+// Rebuild the grid with isSafe / isDangerous / isHint flags.
+// Call this after every player move or toggle change.
+export function buildGrid(grid, playerPos, monsters, showOverlay, monsterDist, showHint, stepCount) {
+  const { playerDist } = computeSafeZone(grid, playerPos, monsters);
 
-export const updateGridZones = (currentGrid, player, monsters, show) => {
-  if (!show) {
-    return currentGrid.map(r => r.map(c => ({ ...c, isPlayerZone: false, isMonsterZone: false })));
-  }
-  const { playerZone, monsterZone } = floodFill(currentGrid, player, monsters);
-  return currentGrid.map((r, rIdx) => r.map((c, cIdx) => {
-    const key = `${rIdx},${cIdx}`;
-    return {
-      ...c,
-      isPlayerZone: playerZone.has(key),
-      isMonsterZone: monsterZone.has(key)
-    };
-  }));
-};
+  // Step 1: stamp safe/dangerous overlay
+  const withOverlay = grid.map((row, r) =>
+    row.map((cell, c) => {
+      let isSafe = false, isDangerous = false;
 
-export const moveMonstersInstant = (nextGrid, monsterPositions, nextPlayerPos) => {
-  const finalGrid = nextGrid.map(r => r.map(c => ({ ...c, isPath: false })));
-  const nextMonsters = monsterPositions.map(mPos => {
-    const { path } = bfs(finalGrid, mPos, nextPlayerPos);
-    if (path && path.length > 0) {
-      finalGrid[mPos.row][mPos.col].isMonster = false;
-      finalGrid[path[0].row][path[0].col].isMonster = true;
-      return path[0];
-    }
-    return mPos;
-  });
-  return { nextMonsters, finalGrid };
-};
+      if (showOverlay && !cell.isWall && !cell.isPlayer && !cell.isMonster) {
+        const pd = playerDist[r][c];
+        const md = monsterDist[r][c];
+        if (pd !== -1) {
+          isSafe      = md === -1 || pd < md; // no monster, or player faster
+          isDangerous = !isSafe;
+        }
+      }
 
-export const calculateDPPath = (grid, playerPos, monsters, movesLeft, showHint) => {
-  const clearedGrid = grid.map(r => r.map(c => ({ ...c, isPath: false })));
-  if (!showHint) return { grid: clearedGrid, message: '' };
+      return { ...cell, isSafe, isDangerous, isHint: false };
+    })
+  );
 
-  const path = dpEscape(clearedGrid, playerPos, monsters, movesLeft);
-  if (path && path.length > 0) {
-    // Only highlight the very next step, not the full path
-    const nextStep = path[0];
-    clearedGrid[nextStep.row][nextStep.col].isPath = true;
-    return { grid: clearedGrid, message: `Next step highlighted — ${path.length} moves to escape` };
-  }
-  return { grid: clearedGrid, message: 'No escape possible' };
-};
+  // Step 2: stamp hint path on top
+  if (!showHint) return { grid: withOverlay, hintMessage: '' };
+
+  const path = findSafePath(withOverlay, monsterDist, playerPos, stepCount);
+  if (!path) return { grid: withOverlay, hintMessage: 'No safe escape path exists!' };
+
+  const withHint = withOverlay.map(row => row.map(cell => ({ ...cell })));
+  for (const { row, col } of path) withHint[row][col].isHint = true;
+
+  return {
+    grid: withHint,
+    hintMessage: `Optimal path: ${path.length} move${path.length === 1 ? '' : 's'} to escape`,
+  };
+}
+
+// Compute monsterDist once at level load (monsters never move, so this never changes).
+// We only need the monster half of computeSafeZone.
+export function computeMonsterDist(grid, playerStart, monsters) {
+  return computeSafeZone(grid, playerStart, monsters).monsterDist;
+}

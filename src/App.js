@@ -4,114 +4,139 @@ import Navbar from './components/Navbar';
 import InfoPanel from './components/InfoPanel';
 import { useGame } from './hooks/useGame';
 
+// ── Small helper components ─────────────────────────────────────────────────
+
+function Modal({ children }) {
+  return (
+    <div style={{
+      position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+      background: 'rgba(15,23,42,0.88)', backdropFilter: 'blur(10px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      zIndex: 100, animation: 'fadeIn 0.3s ease',
+    }}>
+      {children}
+    </div>
+  );
+}
+
+function ModalCard({ color, children }) {
+  return (
+    <div style={{
+      background: '#1e293b', border: `2px solid ${color}`, padding: '32px 44px',
+      borderRadius: '18px', textAlign: 'center', width: '380px',
+      boxShadow: `0 0 40px ${color}55`,
+    }}>
+      {children}
+    </div>
+  );
+}
+
+function HintBanner({ hintMessage }) {
+  const isError = hintMessage.includes('No safe');
+  return (
+    <div style={{
+      background: isError ? 'rgba(214,48,49,0.12)' : 'rgba(162,155,254,0.12)',
+      color:  isError ? '#f87171' : '#a29bfe',
+      border: `1px solid ${isError ? '#f87171' : '#a29bfe'}`,
+      padding: '9px 20px', borderRadius: '8px', marginBottom: '12px',
+      width: '620px', textAlign: 'center', fontFamily: 'JetBrains Mono',
+      fontSize: '0.85rem', fontWeight: '600', boxSizing: 'border-box',
+      animation: isError ? 'flash 1.5s infinite' : 'none',
+    }}>
+      {isError ? '⚠️ ' : '💡 '}{hintMessage}
+    </div>
+  );
+}
+
+// ── Main App ────────────────────────────────────────────────────────────────
+
 export default function App() {
   const {
-    currentLevel, score, movesLeft, gameStatus, message,
-    showBFS, showDangerZones, showFloodFill, showHint,
-    isDeadEnd, hintMessage, grid, isAnimating,
-    toggleBFS, toggleDanger, toggleZones, toggleHint,
-    resetLevel, handleNextLevel, movePlayer
+    currentLevel, score, stepCount, gameStatus, message, hintMessage,
+    showOverlay, showHint, grid,
+    toggleOverlay, toggleHint, resetLevel, handleNextLevel, movePlayer,
   } = useGame();
 
+  // Keyboard controls
   useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (isAnimating) return;
-      let dRow = 0, dCol = 0;
-      switch (e.key.toLowerCase()) {
-        case 'arrowup': case 'w': dRow = -1; e.preventDefault(); break;
-        case 'arrowdown': case 's': dRow = 1; e.preventDefault(); break;
-        case 'arrowleft': case 'a': dCol = -1; e.preventDefault(); break;
-        case 'arrowright': dCol = 1; e.preventDefault(); break;
-        case 'd':
-          if (e.shiftKey) toggleDanger();
-          else { dCol = 1; e.preventDefault(); }
-          break;
-        case 'b': toggleBFS(); return;
-        case 'f': toggleZones(); return;
-        case 'h': toggleHint(); return;
-        case 'r': resetLevel(); return;
-        default: return;
+    const onKey = (e) => {
+      const key = e.key.toLowerCase();
+
+      // When game is over, only R works
+      if (gameStatus !== 'playing') {
+        if (key === 'r') resetLevel();
+        return;
       }
-      if (gameStatus === 'playing' && (dRow !== 0 || dCol !== 0)) {
-        movePlayer(dRow, dCol);
-      }
+
+      const moves = { arrowup: [-1,0], w: [-1,0], arrowdown: [1,0], s: [1,0],
+                      arrowleft: [0,-1], a: [0,-1], arrowright: [0,1], d: [0,1] };
+      if (moves[key]) {
+        e.preventDefault();
+        movePlayer(...moves[key]);
+      } else if (key === 'o') toggleOverlay();
+      else if (key === 'h') toggleHint();
+      else if (key === 'r') resetLevel();
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [movePlayer, resetLevel, gameStatus, isAnimating, toggleBFS, toggleDanger, toggleZones, toggleHint]);
+
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [gameStatus, movePlayer, toggleOverlay, toggleHint, resetLevel]);
 
   return (
     <div className="game-container">
-      {gameStatus !== 'playing' && (
-        <div style={{
-          position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
-          backgroundColor: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(8px)',
-          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-          zIndex: 100, animation: 'fadeIn 0.3s ease', borderRadius: '12px'
-        }}>
-          {gameStatus === 'won' && (
-            <div style={{
-              background: '#1e293b', border: '2px solid #00b894', padding: '30px 40px', borderRadius: '16px',
-              textAlign: 'center', boxShadow: '0 0 20px rgba(0, 184, 148, 0.3)', width: '350px'
-            }}>
-              <h2 style={{ color: '#00b894', margin: '0 0 10px 0', fontSize: '2rem', fontWeight: '800' }}>LEVEL CLEARED!</h2>
-              <p style={{ color: '#f8fafc', fontSize: '1.1rem', margin: '0 0 20px 0' }}>Score gained: <span style={{ color: '#fdcb6e', fontWeight: 'bold' }}>{movesLeft * 10}</span></p>
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button className="nav-btn restart" onClick={resetLevel}>Retry</button>
-                <button className="nav-btn active" onClick={handleNextLevel}>Next Level</button>
-              </div>
+
+      {/* Game over / win overlays */}
+      {gameStatus === 'won' && (
+        <Modal>
+          <ModalCard color="#00b894">
+            <h2 style={{ color: '#00b894', margin: '0 0 8px', fontSize: '2rem', fontWeight: 800 }}>ESCAPED! 🎉</h2>
+            <p style={{ color: '#f8fafc', margin: '0 0 4px' }}>{message}</p>
+            <p style={{ color: '#94a3b8', fontSize: '0.9rem', margin: '0 0 22px' }}>
+              Steps: <strong style={{ color: '#a29bfe' }}>{stepCount}</strong>
+            </p>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button className="nav-btn restart" onClick={resetLevel}>Retry</button>
+              <button className="nav-btn active"  onClick={handleNextLevel}>Next Level →</button>
             </div>
-          )}
-          {gameStatus === 'lost' && (
-            <div style={{
-              background: '#1e293b', border: '2px solid #d63031', padding: '30px 40px', borderRadius: '16px',
-              textAlign: 'center', boxShadow: '0 0 20px rgba(214, 48, 49, 0.3)', width: '350px'
-            }}>
-              <h2 style={{ color: '#d63031', margin: '0 0 10px 0', fontSize: '2rem', fontWeight: '800' }}>GAME OVER</h2>
-              <p style={{ color: '#94a3b8', fontSize: '1rem', margin: '0 0 20px 0' }}>{message}</p>
-              <button className="nav-btn restart" onClick={resetLevel} style={{ width: '100%', padding: '10px' }}>Try Again (R)</button>
-            </div>
-          )}
-          {gameStatus === 'escaped' && (
-            <div style={{
-              background: '#1e293b', border: '2px solid #fdcb6e', padding: '35px 45px', borderRadius: '16px',
-              textAlign: 'center', boxShadow: '0 0 25px rgba(253, 203, 110, 0.4)', width: '400px'
-            }}>
-              <h1 style={{ color: '#fdcb6e', margin: '0 0 10px 0', fontSize: '2.5rem', fontWeight: '800', letterSpacing: '-0.05em' }}>VICTORY!</h1>
-              <p style={{ color: '#f8fafc', fontSize: '1.2rem', margin: '0 0 10px 0' }}>You escaped the grid maze!</p>
-              <p style={{ color: '#94a3b8', fontSize: '1.1rem', margin: '0 0 25px 0' }}>Final Score: <span style={{ color: '#fdcb6e', fontWeight: 'bold' }}>{score}</span></p>
-              <button className="nav-btn active" onClick={resetLevel} style={{ width: '100%', padding: '10px' }}>Play Again</button>
-            </div>
-          )}
-        </div>
+          </ModalCard>
+        </Modal>
+      )}
+
+      {gameStatus === 'escaped' && (
+        <Modal>
+          <ModalCard color="#fdcb6e">
+            <h1 style={{ color: '#fdcb6e', margin: '0 0 10px', fontSize: '2.8rem', fontWeight: 800 }}>VICTORY! 🏆</h1>
+            <p style={{ color: '#f8fafc', margin: '0 0 8px' }}>You escaped the grid!</p>
+            <p style={{ color: '#94a3b8', margin: '0 0 26px' }}>
+              Final Score: <strong style={{ color: '#fdcb6e' }}>{score}</strong>
+            </p>
+            <button className="nav-btn active" onClick={resetLevel} style={{ width: '100%', padding: 12 }}>
+              Play Again
+            </button>
+          </ModalCard>
+        </Modal>
+      )}
+
+      {gameStatus === 'lost' && (
+        <Modal>
+          <ModalCard color="#d63031">
+            <h2 style={{ color: '#d63031', margin: '0 0 8px', fontSize: '2rem', fontWeight: 800 }}>INTERCEPTED 💀</h2>
+            <p style={{ color: '#94a3b8', margin: '0 0 22px' }}>{message}</p>
+            <button className="nav-btn restart" onClick={resetLevel} style={{ width: '100%', padding: 12 }}>
+              Try Again (R)
+            </button>
+          </ModalCard>
+        </Modal>
       )}
 
       <Navbar
-        level={currentLevel} score={score} movesLeft={movesLeft} gameStatus={gameStatus}
-        showBFS={showBFS} toggleBFS={toggleBFS} showDanger={showDangerZones} toggleDanger={toggleDanger}
-        showZones={showFloodFill} toggleZones={toggleZones} showHint={showHint} toggleHint={toggleHint}
+        level={currentLevel} score={score} stepCount={stepCount} gameStatus={gameStatus}
+        showOverlay={showOverlay} toggleOverlay={toggleOverlay}
+        showHint={showHint}    toggleHint={toggleHint}
         onRestart={resetLevel}
       />
 
-      {isDeadEnd && gameStatus === 'playing' && (
-        <div style={{
-          backgroundColor: 'rgba(214, 48, 49, 0.25)', color: '#d63031', border: '2px dashed #d63031', padding: '10px 20px',
-          borderRadius: '6px', marginBottom: '15px', width: '600px', textAlign: 'center', fontWeight: 'bold',
-          animation: 'flash 1.5s infinite', fontFamily: 'JetBrains Mono', fontSize: '0.9rem', boxSizing: 'border-box'
-        }}>
-          ⚠️ Warning: No safe path to exit! (Trapped)
-        </div>
-      )}
-
-      {hintMessage && gameStatus === 'playing' && (
-        <div style={{
-          backgroundColor: 'rgba(162, 155, 254, 0.15)', color: '#a29bfe', border: '1px solid #a29bfe', padding: '10px 20px',
-          borderRadius: '6px', marginBottom: '15px', width: '600px', textAlign: 'center', fontWeight: 'bold',
-          fontFamily: 'JetBrains Mono', fontSize: '0.9rem', boxSizing: 'border-box'
-        }}>
-          💡 DP Hint: {hintMessage}
-        </div>
-      )}
+      {hintMessage && gameStatus === 'playing' && <HintBanner hintMessage={hintMessage} />}
 
       <Grid grid={grid} />
       <InfoPanel level={currentLevel} />

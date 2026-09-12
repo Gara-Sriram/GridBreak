@@ -1,142 +1,146 @@
 import { useState, useEffect, useCallback } from 'react';
-import { bfs } from '../algorithms/bfs';
-import { canReachExit } from '../algorithms/reachability';
 import { LEVELS, ROWS, COLS, createInitialGridForLevel } from '../levels/levelConfig';
-import { updateGridDanger, updateGridZones, moveMonstersInstant, calculateDPPath } from '../utils/gameEngine';
+import { buildGrid, computeMonsterDist } from '../utils/gameEngine';
+import { isCellSafe } from '../algorithms/safeZoneBfs';
 
 export function useGame() {
   const [currentLevel, setCurrentLevel] = useState(1);
-  const [score, setScore] = useState(0);
-  const [isAnimating, setIsAnimating] = useState(false);
-  const [grid, setGrid] = useState([]);
-  const [toggles, setToggles] = useState({ bfs: true, danger: true, zones: false, hint: false });
-  const [state, setState] = useState({
-    playerPos: { row: 0, col: 0 }, monsters: [], movesLeft: 0, gameStatus: 'playing', message: '', isDeadEnd: false, hintMessage: ''
-  });
+  const [score, setScore]               = useState(0);
+  const [grid, setGrid]                 = useState([]);
+  const [monsterDist, setMonsterDist]   = useState(null); // precomputed once per level
+  const [showOverlay, setShowOverlay]   = useState(true);
+  const [showHint, setShowHint]         = useState(false);
+  const [playerPos, setPlayerPos]       = useState({ row: 0, col: 0 });
+  const [stepCount, setStepCount]       = useState(0);
+  const [gameStatus, setGameStatus]     = useState('playing');
+  const [message, setMessage]           = useState('');
+  const [hintMessage, setHintMessage]   = useState('');
 
+  // ── Load a level ────────────────────────────────────────────────────────────
   const loadLevel = useCallback((lvl) => {
     const cfg = LEVELS[lvl - 1];
     if (!cfg) return;
-    setToggles(cfg.defaultToggles);
-    const initGrid = createInitialGridForLevel(cfg);
-    let finalGrid = updateGridDanger(initGrid, cfg.monsters, cfg.defaultToggles.danger);
-    finalGrid = updateGridZones(finalGrid, cfg.playerStart, cfg.monsters, cfg.defaultToggles.zones);
-    const { grid: pGrid, message: pMsg } = calculateDPPath(finalGrid, cfg.playerStart, cfg.monsters, cfg.movesLimit, cfg.defaultToggles.hint);
-    setGrid(pGrid);
-    setState({ playerPos: cfg.playerStart, monsters: cfg.monsters, movesLeft: cfg.movesLimit, gameStatus: 'playing', message: '', isDeadEnd: false, hintMessage: pMsg });
-    setIsAnimating(false);
+
+    const rawGrid = createInitialGridForLevel(cfg);
+    const md = computeMonsterDist(rawGrid, cfg.playerStart, cfg.monsters);
+    const { grid: builtGrid } = buildGrid(rawGrid, cfg.playerStart, cfg.monsters, true, md, false, 0);
+
+    setMonsterDist(md);
+    setGrid(builtGrid);
+    setPlayerPos(cfg.playerStart);
+    setStepCount(0);
+    setGameStatus('playing');
+    setMessage('');
+    setHintMessage('');
+    setShowOverlay(true);
+    setShowHint(false);
   }, []);
 
+  // Load level 1 on mount
   useEffect(() => { loadLevel(1); }, [loadLevel]);
 
-  const resetLevel = useCallback(() => loadLevel(currentLevel), [currentLevel, loadLevel]);
-  const handleNextLevel = () => { setCurrentLevel(p => { loadLevel(p + 1); return p + 1; }); };
+  const resetLevel   = useCallback(() => loadLevel(currentLevel), [currentLevel, loadLevel]);
+  const handleNextLevel = useCallback(() => {
+    const next = currentLevel + 1;
+    setCurrentLevel(next);
+    loadLevel(next);
+  }, [currentLevel, loadLevel]);
 
-  const completeTurn = useCallback((nextMonsters, updatedGrid, nextMoves, nextStatus, nextMsg, nextPlayer, cfg) => {
-    let status = nextStatus, msg = nextMsg;
-    if (nextMonsters.some(m => m.row === nextPlayer.row && m.col === nextPlayer.col)) {
-      status = 'lost'; msg = 'Caught by a monster! Game Over.';
-    } else if (nextMoves === 0) {
-      status = 'lost'; msg = 'Out of moves! Game Over.';
-    }
-    let finalGrid = updateGridDanger(updatedGrid, nextMonsters, toggles.danger);
-    const deadEnd = !canReachExit(finalGrid, nextPlayer);
-    finalGrid = updateGridZones(finalGrid, nextPlayer, nextMonsters, toggles.zones);
-    const { grid: pGrid, message: pMsg } = calculateDPPath(finalGrid, nextPlayer, nextMonsters, nextMoves, toggles.hint);
-    setGrid(pGrid);
-    setState(prev => ({ ...prev, monsters: nextMonsters, movesLeft: nextMoves, gameStatus: status, message: msg, isDeadEnd: deadEnd, hintMessage: pMsg }));
-  }, [toggles.danger, toggles.zones, toggles.hint]);
-
-  const movePlayer = useCallback((dRow, dCol) => {
-    if (isAnimating || state.gameStatus !== 'playing') return;
+  // ── Toggle safe-zone overlay ────────────────────────────────────────────────
+  const toggleOverlay = useCallback(() => {
+    const nextOverlay = !showOverlay;
+    setShowOverlay(nextOverlay);
     const cfg = LEVELS[currentLevel - 1];
-    const newRow = state.playerPos.row + dRow, newCol = state.playerPos.col + dCol;
-    if (newRow < 0 || newRow >= ROWS || newCol < 0 || newCol >= COLS || grid[newRow][newCol].isWall) return;
+    if (!cfg) return;
+    const { grid: newGrid, hintMessage: hm } = buildGrid(
+      grid, playerPos, cfg.monsters, nextOverlay, monsterDist, showHint, stepCount
+    );
+    setGrid(newGrid);
+    setHintMessage(hm);
+  }, [showOverlay, currentLevel, grid, playerPos, monsterDist, showHint, stepCount]);
 
-    let nextGrid = grid.map(r => r.map(c => ({ ...c })));
-    nextGrid[state.playerPos.row][state.playerPos.col].isPlayer = false;
+  // ── Toggle hint path ────────────────────────────────────────────────────────
+  const toggleHint = useCallback(() => {
+    const nextHint = !showHint;
+    setShowHint(nextHint);
+    const cfg = LEVELS[currentLevel - 1];
+    if (!cfg) return;
+    const { grid: newGrid, hintMessage: hm } = buildGrid(
+      grid, playerPos, cfg.monsters, showOverlay, monsterDist, nextHint, stepCount
+    );
+    setGrid(newGrid);
+    setHintMessage(hm);
+  }, [showHint, currentLevel, grid, playerPos, showOverlay, monsterDist, stepCount]);
+
+  // ── Move the player ─────────────────────────────────────────────────────────
+  const movePlayer = useCallback((dRow, dCol) => {
+    if (gameStatus !== 'playing') return;
+
+    const newRow = playerPos.row + dRow;
+    const newCol = playerPos.col + dCol;
+
+    // Ignore out-of-bounds or wall moves
+    if (newRow < 0 || newRow >= ROWS || newCol < 0 || newCol >= COLS) return;
+    if (grid[newRow][newCol].isWall) return;
+
+    // Can't walk into a monster
+    if (grid[newRow][newCol].isMonster) {
+      setGameStatus('lost');
+      setMessage('You walked into a monster!');
+      return;
+    }
+
+    const nextStep = stepCount + 1;
+
+    // CSES safety check: monster arrives at (newRow, newCol) in ≤ nextStep steps → Game Over
+    if (!isCellSafe(monsterDist, newRow, newCol, nextStep)) {
+      // Move the player visually, then show game over
+      const nextGrid = grid.map(r => r.map(c => ({ ...c, isHint: false })));
+      nextGrid[playerPos.row][playerPos.col].isPlayer = false;
+      nextGrid[newRow][newCol].isPlayer = true;
+      setGrid(nextGrid);
+      setPlayerPos({ row: newRow, col: newCol });
+      setStepCount(nextStep);
+      setGameStatus('lost');
+      setMessage('A monster can reach there before you — intercepted!');
+      return;
+    }
+
+    // Move player in the grid
+    const cfg = LEVELS[currentLevel - 1];
+    const nextGrid = grid.map(r => r.map(c => ({ ...c })));
+    nextGrid[playerPos.row][playerPos.col].isPlayer = false;
     nextGrid[newRow][newCol].isPlayer = true;
-    const nextPlayer = { row: newRow, col: newCol };
-    setState(prev => ({ ...prev, playerPos: nextPlayer }));
 
-    let nextStatus = state.gameStatus, nextMsg = '';
+    const newPos = { row: newRow, col: newCol };
+
+    // Win: reached a border exit
     if (nextGrid[newRow][newCol].isExit) {
-      const lvlScore = state.movesLeft * 10;
-      setScore(prev => prev + lvlScore);
-      nextStatus = currentLevel < 10 ? 'won' : 'escaped';
-      nextMsg = currentLevel < 10 ? `Level ${currentLevel} Cleared! Score +${lvlScore}.` : `Congratulations! You Escaped! Final Score: ${score + lvlScore}`;
-      setState(prev => ({ ...prev, gameStatus: nextStatus, message: nextMsg }));
+      const isLastLevel = currentLevel >= LEVELS.length;
+      const bonus = Math.max(0, 200 - nextStep * 5);
+      setScore(prev => prev + bonus);
       setGrid(nextGrid);
+      setPlayerPos(newPos);
+      setStepCount(nextStep);
+      setGameStatus(isLastLevel ? 'escaped' : 'won');
+      setMessage(isLastLevel ? `You escaped! Score +${bonus}` : `Level cleared! Score +${bonus}`);
+      setHintMessage('');
       return;
     }
-    if (state.monsters.some(m => m.row === newRow && m.col === newCol)) {
-      setState(prev => ({ ...prev, gameStatus: 'lost', message: 'Caught by a monster! Game Over.' }));
-      setGrid(nextGrid);
-      return;
-    }
 
-    const nextMoves = state.movesLeft - 1;
-    const monsterCalcs = state.monsters.map(m => bfs(nextGrid, m, nextPlayer));
-
-    if (toggles.bfs) {
-      const merged = [];
-      const maxL = Math.max(...monsterCalcs.map(c => c.frontiersByLevel.length), 0);
-      for (let l = 0; l < maxL; l++) {
-        const lf = [];
-        monsterCalcs.forEach(c => { if (c.frontiersByLevel[l]) lf.push(...c.frontiersByLevel[l]); });
-        merged.push(lf);
-      }
-      setIsAnimating(true);
-      setGrid(nextGrid.map(r => r.map(c => ({ ...c, isBFSFrontier: false, isVisited: false, isPath: false }))));
-
-      merged.forEach((frontier, idx) => {
-        setTimeout(() => {
-          setGrid(prev => {
-            const nextA = prev.map(r => r.map(c => ({ ...c })));
-            if (idx > 0) { merged[idx - 1].forEach(cell => { nextA[cell.row][cell.col].isBFSFrontier = false; nextA[cell.row][cell.col].isVisited = true; }); }
-            frontier.forEach(cell => { nextA[cell.row][cell.col].isBFSFrontier = true; });
-            return nextA;
-          });
-        }, idx * 80);
-      });
-
-      setTimeout(() => {
-        const finalGrid = nextGrid.map(r => r.map(c => ({ ...c, isBFSFrontier: false, isVisited: false })));
-        const nextMonsters = state.monsters.map((m, idx) => {
-          const path = monsterCalcs[idx].path;
-          if (path && path.length > 0) {
-            finalGrid[m.row][m.col].isMonster = false;
-            finalGrid[path[0].row][path[0].col].isMonster = true;
-            return path[0];
-          }
-          return m;
-        });
-        setIsAnimating(false);
-        completeTurn(nextMonsters, finalGrid, nextMoves, nextStatus, nextMsg, nextPlayer, cfg);
-      }, merged.length * 80 + 200);
-    } else {
-      const { nextMonsters, finalGrid } = moveMonstersInstant(nextGrid, state.monsters, nextPlayer);
-      completeTurn(nextMonsters, finalGrid, nextMoves, nextStatus, nextMsg, nextPlayer, cfg);
-    }
-  }, [state, grid, isAnimating, currentLevel, score, toggles, completeTurn]);
-
-  const toggleBFS = useCallback(() => setToggles(p => ({ ...p, bfs: !p.bfs })), []);
-  const toggleDanger = useCallback(() => setToggles(p => { setGrid(g => updateGridDanger(g, state.monsters, !p.danger)); return { ...p, danger: !p.danger }; }), [state.monsters]);
-  const toggleZones = useCallback(() => setToggles(p => { setGrid(g => updateGridZones(g, state.playerPos, state.monsters, !p.zones)); return { ...p, zones: !p.zones }; }), [state.playerPos, state.monsters]);
-  const toggleHint = useCallback(() => setToggles(p => {
-    const nextShow = !p.hint;
-    setGrid(g => {
-      const { grid: pGrid, message: pMsg } = calculateDPPath(g, state.playerPos, state.monsters, state.movesLeft, nextShow);
-      setState(prev => ({ ...prev, hintMessage: pMsg }));
-      return pGrid;
-    });
-    return { ...p, hint: nextShow };
-  }), [state.playerPos, state.monsters, state.movesLeft]);
+    // Normal move: rebuild overlay and hint
+    const { grid: finalGrid, hintMessage: hm } = buildGrid(
+      nextGrid, newPos, cfg.monsters, showOverlay, monsterDist, showHint, nextStep
+    );
+    setGrid(finalGrid);
+    setPlayerPos(newPos);
+    setStepCount(nextStep);
+    setHintMessage(hm);
+  }, [gameStatus, playerPos, stepCount, grid, monsterDist, currentLevel, showOverlay, showHint]);
 
   return {
-    currentLevel, score, movesLeft: state.movesLeft, gameStatus: state.gameStatus, message: state.message,
-    showBFS: toggles.bfs, showDangerZones: toggles.danger, showFloodFill: toggles.zones, showHint: toggles.hint,
-    isDeadEnd: state.isDeadEnd, hintMessage: state.hintMessage, grid,
-    toggleBFS, toggleDanger, toggleZones, toggleHint, resetLevel, handleNextLevel, movePlayer, isAnimating
+    currentLevel, score, stepCount, gameStatus, message, hintMessage,
+    showOverlay, showHint, grid,
+    toggleOverlay, toggleHint, resetLevel, handleNextLevel, movePlayer,
   };
 }

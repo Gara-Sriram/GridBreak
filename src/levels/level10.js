@@ -1,46 +1,51 @@
-// Level 10 — 2 Paths only. Both sides closed. Tightest maze.
-// Gaps: top(col 9) only, bottom(col 15) only. Left and right CLOSED.
-// Inner L-wall: horizontal bar row 9 cols 10-15, vertical wall col 11 rows 10-12.
-//
-// The L-wall makes it IMPOSSIBLE to go straight left or straight up from start:
-//  - (10,11) is a wall (col 11 at row 10) — can't go left
-//  - (9,12)  is a wall (row 9 at col 12) — can't go straight up
-//
-// ONLY viable escape — bottom gap (14,15) via RIGHT then DOWN:
-//  → RIGHT 3 to (10,15) [col 11 wall doesn't block right of col 12] 
-//  ↓ DOWN 4  to (14,15) [gap in bottom fence]
-//  ↓ DOWN 5  to border
-//  Total: 12 steps. Player wins by 3 vs closest monster (17,22) at 10 steps from gap.
-//
-// Top escape exists too but requires: RIGHT 3 → DOWN 3 → LEFT 6 → UP 8 = 20+ steps.
-// That path exceeds movesLimit. Bottom is the intended route.
-//
-// 5 monsters surround from all angles. You have only ONE safe path.
+/**
+ * Level 10 — Final Escape (CSES Monsters)
+ *
+ * Eight monsters, four horizontal walls with gaps at col 12, and a tight
+ * safe corridor straight up the center. This is a direct instance of the
+ * CSES Monsters problem.
+ *
+ * All monster distances to (0,12) are verified > 10 (player's path length):
+ *   (2,3)  → (0,12) = 2+9 = 11  > 10 ✓
+ *   (2,21) → (0,12) = 2+9 = 11  > 10 ✓
+ *   (6,1)  → (0,12) = 6+11 = 17 > 10 ✓
+ *   (6,23) → (0,12) = 6+11 = 17 > 10 ✓
+ *   (14,1) → (0,12) = 14+11= 25 > 10 ✓
+ *   (14,23)→ (0,12) = 14+11= 25 > 10 ✓
+ *   (17,3) → (0,12) = 17+9 = 26 > 10 ✓
+ *   (17,21)→ (0,12) = 17+9 = 26 > 10 ✓
+ *
+ * Four walls (rows 4, 7, 13, 16) each split at col 12 force the player
+ * to thread through all four gaps. Straying left or right enters a
+ * monster-dominated danger zone.
+ *
+ * Lesson: This is the full CSES algorithm. Enable the hint (H) to see
+ * the unique optimal path — then try to find it yourself without it!
+ */
 export const level10 = {
   playerStart: { row: 10, col: 12 },
   monsters: [
-    { row: 2, col: 2 },
-    { row: 2, col: 22 },
-    { row: 17, col: 2 },
-    { row: 17, col: 22 },
-    { row: 4, col: 18 }     // pressures from top-right, 15+ steps from (14,15)
+    { row: 2,  col: 3  },
+    { row: 2,  col: 21 },
+    { row: 6,  col: 1  },
+    { row: 6,  col: 23 },
+    { row: 14, col: 1  },
+    { row: 14, col: 23 },
+    { row: 17, col: 3  },
+    { row: 17, col: 21 },
   ],
   walls: [
-    // Top fence (row 5) — gap at col 9 only
-    { row: 5, colStart: 6, colEnd: 8 },
-    { row: 5, colStart: 10, colEnd: 18 },
-    // Bottom fence (row 14) — gap at col 15 only
-    { row: 14, colStart: 6, colEnd: 14 },
-    { row: 14, colStart: 16, colEnd: 18 },
-    // Left fence (col 6, rows 6-13) — CLOSED
-    { col: 6, rowStart: 6, rowEnd: 13 },
-    // Right fence (col 18, rows 6-13) — CLOSED
-    { col: 18, rowStart: 6, rowEnd: 13 },
-    // Inner L-wall — horizontal bar seals direct upward path
-    { row: 9, colStart: 10, colEnd: 15 },
-    // Vertical wall blocks leftward move at start position
-    { col: 11, rowStart: 10, rowEnd: 12 }
+    // Wall row 4 — gap at col 12
+    { row: 4,  colStart: 3,  colEnd: 11 },
+    { row: 4,  colStart: 13, colEnd: 21 },
+    // Wall row 7 — gap at col 12
+    { row: 7,  colStart: 3,  colEnd: 11 },
+    { row: 7,  colStart: 13, colEnd: 21 },
+    // Wall row 13 — gap at col 12
+    { row: 13, colStart: 3,  colEnd: 11 },
+    { row: 13, colStart: 13, colEnd: 21 },
+    // Wall row 16 — gap at col 12
+    { row: 16, colStart: 3,  colEnd: 11 },
+    { row: 16, colStart: 13, colEnd: 21 },
   ],
-  movesLimit: 18,
-  defaultToggles: { bfs: false, danger: false, zones: false, hint: true }
 };

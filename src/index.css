@@ -1,5 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap');
 
+/* ── Reset & base ──────────────────────────────────────────────────────────── */
 body {
   margin: 0;
   padding: 0;
@@ -9,6 +10,7 @@ body {
   overflow-x: hidden;
 }
 
+/* ── Game layout ────────────────────────────────────────────────────────────── */
 .game-container {
   display: flex;
   flex-direction: column;
@@ -19,11 +21,14 @@ body {
   position: relative;
 }
 
+/* ── Grid wrapper ───────────────────────────────────────────────────────────── */
 .grid-wrapper {
   background: #1e293b;
   padding: 10px;
   border-radius: 12px;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+  box-shadow:
+    0 10px 25px -5px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(255,255,255,0.04);
   border: 1px solid #334155;
   display: inline-block;
 }
@@ -35,135 +40,167 @@ body {
   gap: 2px;
 }
 
-/* Cell Styles */
+/* ── Base cell ──────────────────────────────────────────────────────────────── */
 .cell {
   width: 24px;
   height: 24px;
-  background-color: #ffffff;
+  background-color: #1a2740;      /* dark navy — "unknown" cells */
   border-radius: 3px;
-  transition: background-color 0.15s ease, transform 0.1s ease;
+  transition: background-color 0.12s ease, box-shadow 0.12s ease, transform 0.1s ease;
   box-sizing: border-box;
 }
 
+/* ── Wall ───────────────────────────────────────────────────────────────────── */
 .cell.wall {
-  background-color: #2d3436;
+  background-color: #2d3748;
+  border-radius: 2px;
 }
 
+/* ── Player ─────────────────────────────────────────────────────────────────── */
 .cell.player {
   background-color: #00b894;
-  box-shadow: 0 0 8px #00b894;
-  transform: scale(0.95);
+  box-shadow: 0 0 10px #00b894, 0 0 20px rgba(0, 184, 148, 0.4);
+  transform: scale(0.9);
   border-radius: 50%;
+  z-index: 2;
 }
 
+/* ── Monster ────────────────────────────────────────────────────────────────── */
 .cell.monster {
   background-color: #d63031;
-  box-shadow: 0 0 8px #d63031;
-  transform: scale(0.95);
-  border-radius: 4px;
+  box-shadow: 0 0 10px #d63031, 0 0 20px rgba(214, 48, 49, 0.4);
+  transform: scale(0.92);
+  border-radius: 5px;
+  animation: monsterPulse 2s infinite;
 }
 
+/* ── Exit (safe) ────────────────────────────────────────────────────────────── */
 .cell.exit {
   background-color: #fdcb6e;
-  box-shadow: 0 0 10px #fdcb6e;
-  transform: scale(0.95);
+  box-shadow: 0 0 12px #fdcb6e, 0 0 24px rgba(253, 203, 110, 0.4);
   border-radius: 4px;
-  animation: pulse 1.5s infinite;
+  animation: exitPulse 1.4s infinite;
 }
 
-.cell.visited {
-  background-color: #74b9ff;
+/* Exit the monster dominates — dimmer gold */
+.cell.exit.exit-blocked {
+  background-color: #a37a2a;
+  box-shadow: 0 0 4px rgba(163, 122, 42, 0.5);
+  animation: none;
+  opacity: 0.65;
 }
 
-.cell.frontier {
-  background-color: #0984e3;
-  box-shadow: 0 0 6px #0984e3;
-  transform: scale(1.05);
+/* ── Safe zone: player arrives before any monster ───────────────────────────── */
+.cell.safe {
+  background-color: #1a3a2a;           /* dark green base */
+  border: 1px solid rgba(74, 222, 128, 0.25);
 }
 
-.cell.danger-1 {
-  background-color: #ff7675;
+.cell.safe:hover {
+  background-color: #1e4a32;
+  border-color: rgba(74, 222, 128, 0.5);
 }
 
-.cell.danger-2 {
-  background-color: #fab1a0;
+/* ── Dangerous zone: monster arrives at same time or sooner ─────────────────── */
+.cell.dangerous {
+  background-color: #2a1a1a;           /* dark red base */
+  border: 1px solid rgba(248, 113, 113, 0.2);
 }
 
-.cell.danger-3 {
-  background-color: #ffeaa7;
+.cell.dangerous:hover {
+  background-color: #3a1a1a;
+  border-color: rgba(248, 113, 113, 0.4);
 }
 
-.cell.path {
-  background-color: #a29bfe;
-  box-shadow: 0 0 6px #a29bfe;
+/* ── Hint path: optimal escape route shown by DP/BFS ────────────────────────── */
+.cell.hint-path {
+  background-color: #2d1f4a;           /* deep purple base */
+  border: 1px solid rgba(162, 155, 254, 0.55);
+  box-shadow: 0 0 6px rgba(162, 155, 254, 0.3);
+  animation: hintPulse 1.8s infinite;
 }
 
-.cell.zone-player {
-  background-color: #a2f2df; /* light green tint */
-  border: 1px solid #00b894;
+@keyframes hintPulse {
+  0%   { box-shadow: 0 0 4px rgba(162, 155, 254, 0.25); border-color: rgba(162,155,254,0.4); }
+  50%  { box-shadow: 0 0 10px rgba(162, 155, 254, 0.6); border-color: rgba(162,155,254,0.85); }
+  100% { box-shadow: 0 0 4px rgba(162, 155, 254, 0.25); border-color: rgba(162,155,254,0.4); }
 }
 
-.cell.zone-monster {
-  background-color: #ffb3b3; /* light red tint */
-  border: 1px solid #d63031;
+/* ── Animations ─────────────────────────────────────────────────────────────── */
+@keyframes exitPulse {
+  0%   { transform: scale(0.88); box-shadow: 0 0 10px #fdcb6e; }
+  50%  { transform: scale(1.0);  box-shadow: 0 0 20px #fdcb6e, 0 0 40px rgba(253,203,110,0.3); }
+  100% { transform: scale(0.88); box-shadow: 0 0 10px #fdcb6e; }
 }
 
-@keyframes pulse {
-  0% {
-    transform: scale(0.9);
-  }
-  50% {
-    transform: scale(1.05);
-  }
-  100% {
-    transform: scale(0.9);
-  }
+@keyframes monsterPulse {
+  0%   { box-shadow: 0 0 8px #d63031; }
+  50%  { box-shadow: 0 0 16px #d63031, 0 0 32px rgba(214,48,49,0.5); }
+  100% { box-shadow: 0 0 8px #d63031; }
 }
 
 @keyframes flash {
-  0% { opacity: 1; }
-  50% { opacity: 0.4; }
+  0%   { opacity: 1; }
+  50%  { opacity: 0.4; }
   100% { opacity: 1; }
 }
 
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.97); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* ── Nav buttons ────────────────────────────────────────────────────────────── */
 .nav-btn {
   flex: 1;
-  background: #334155;
-  border: 1px solid #475569;
-  color: #94a3b8;
-  padding: 8px 12px;
-  border-radius: 6px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #64748b;
+  padding: 8px 14px;
+  border-radius: 8px;
   cursor: pointer;
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.8rem;
   font-weight: 600;
-  transition: all 0.2s ease;
+  transition: all 0.18s ease;
+  letter-spacing: 0.02em;
 }
 
 .nav-btn:hover {
-  background: #475569;
+  background: #334155;
   color: #f1f5f9;
+  border-color: #475569;
 }
 
 .nav-btn.active {
-  background: #00b894;
+  background: linear-gradient(135deg, #00b894, #00cec9);
   border-color: #059669;
   color: #0f172a;
-  box-shadow: 0 0 10px rgba(0, 184, 148, 0.4);
+  box-shadow: 0 0 12px rgba(0, 184, 148, 0.4);
+}
+
+.nav-btn.active:hover {
+  box-shadow: 0 0 20px rgba(0, 184, 148, 0.6);
+}
+
+.nav-btn.hint-active {
+  background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+  border-color: #5a4fcf;
+  color: #f8fafc;
+  box-shadow: 0 0 12px rgba(162, 155, 254, 0.45);
+}
+
+.nav-btn.hint-active:hover {
+  box-shadow: 0 0 20px rgba(162, 155, 254, 0.65);
 }
 
 .nav-btn.restart {
-  background: #d63031;
+  background: linear-gradient(135deg, #d63031, #e17055);
   border-color: #c0392b;
   color: #f8fafc;
+  box-shadow: 0 0 8px rgba(214, 48, 49, 0.3);
 }
 
 .nav-btn.restart:hover {
-  background: #c0392b;
-  color: #ffffff;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  box-shadow: 0 0 16px rgba(214, 48, 49, 0.5);
 }

@@ -1,38 +1,30 @@
-// Level 7 — 5 Paths, non-straight required.
-// Outer fence (rows 5-14, cols 6-18) has gaps at: top(col 9, col 15), bottom(col 9, col 15),
-// left(row 9). Right side is fully closed.
-// Inner bar at row 9, cols 11-13 blocks straight-up movement from center.
-//
-// Required paths:
-//  ↙ LEFT 3 → DOWN 4  to reach bottom-left gap at (14,9)   = 12 steps total
-//  → RIGHT 3 → DOWN 4 to reach bottom-right gap at (14,15) = 12 steps total
-//  ↙ LEFT 3 → UP 5    to reach top-left gap at (5,9)       = 12 steps total
-//
-// 3 monsters in corners — all 10+ steps from nearest gap. Player wins.
+/**
+ * Level 7 — The Pincer
+ *
+ * Three monsters: two guarding the top corners, one blocking the bottom
+ * center. The bottom is cut off, left/right flanks are monster-dominated.
+ * Only the center gap in the wall leads to safety.
+ *
+ * Escape: (10,12) → up through gap at (7,12) → (0,12) in 10 steps.
+ * Monster (2,3)   → (0,12) = 2 + 9 = 11 steps  > 10 ✓
+ * Monster (2,21)  → (0,12) = 2 + 9 = 11 steps  > 10 ✓
+ * Monster (18,12) → (0,12) = 18 + 0 = 18 steps > 10 ✓
+ *
+ * The wall blocks the flanks, funnelling both player and monster through
+ * col 12. Monster (2,3) dominates the left flank above row 7.
+ *
+ * Lesson: Walls concentrate monster reach — find the one safe corridor.
+ */
 export const level7 = {
   playerStart: { row: 10, col: 12 },
   monsters: [
-    { row: 2, col: 2 },
-    { row: 2, col: 22 },
-    { row: 17, col: 2 }
+    { row: 2,  col: 3  },
+    { row: 2,  col: 21 },
+    { row: 18, col: 12 },
   ],
   walls: [
-    // Top fence (row 5) — gaps at col 9 and col 15
-    { row: 5, colStart: 6, colEnd: 8 },
-    { row: 5, colStart: 10, colEnd: 14 },
-    { row: 5, colStart: 16, colEnd: 18 },
-    // Bottom fence (row 14) — gaps at col 9 and col 15
-    { row: 14, colStart: 6, colEnd: 8 },
-    { row: 14, colStart: 10, colEnd: 14 },
-    { row: 14, colStart: 16, colEnd: 18 },
-    // Left fence (col 6, rows 6-13) — gap at row 9
-    { col: 6, rowStart: 6, rowEnd: 8 },
-    { col: 6, rowStart: 10, rowEnd: 13 },
-    // Right fence (col 18, rows 6-13) — CLOSED
-    { col: 18, rowStart: 6, rowEnd: 13 },
-    // Inner bar at row 9, cols 11-13 — blocks straight up from center
-    { row: 9, colStart: 11, colEnd: 13 }
+    // Horizontal wall at row 7 — gap at col 12
+    { row: 7, colStart: 4,  colEnd: 11 },
+    { row: 7, colStart: 13, colEnd: 20 },
   ],
-  movesLimit: 22,
-  defaultToggles: { bfs: false, danger: false, zones: true, hint: false }
 };

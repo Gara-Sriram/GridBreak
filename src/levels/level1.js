@@ -1,11 +1,15 @@
-// Level 1 — Open Arena: no inner fence, maximum paths.
-// ALL border cells glow gold. Player can escape in any direction.
-// 1 monster far away in bottom-right corner. Just pick any direction and run.
-// Lesson: borders = exits. Learn to move quickly toward them.
+/**
+ * Level 1 — Tutorial: One Monster, Open Field
+ *
+ * A single monster placed at the bottom-right of the grid.
+ * Player starts in the center. Most border cells are safe.
+ * Lesson: Understand that border = exit. Move toward the top-left.
+ * The safe zone (green) covers most of the grid — pick any path to the top.
+ */
 export const level1 = {
   playerStart: { row: 10, col: 12 },
-  monsters: [{ row: 17, col: 22 }],
+  monsters: [
+    { row: 17, col: 22 },
+  ],
   walls: [],
-  movesLimit: 20,
-  defaultToggles: { bfs: true, danger: false, zones: false, hint: false }
 };
